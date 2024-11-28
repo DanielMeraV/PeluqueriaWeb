@@ -433,7 +433,7 @@ export default function AdminDashboard() {
 }
 
 function AppointmentManager() {
-    const [appointments, setAppointments] = useState([]);
+    const [appointments, setAppointments] = useState([]); // Inicializado como arreglo vacío
     const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingAppointment, setEditingAppointment] = useState(null);
@@ -446,77 +446,79 @@ function AppointmentManager() {
 
     const fetchServices = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/v1/services');
+            const response = await fetch("http://localhost:5000/api/v1/services");
             const data = await response.json();
             setServices(data);
         } catch (error) {
-            console.error('Error al cargar servicios:', error);
+            console.error("Error al cargar servicios:", error);
+        }
+    };
+
+    const fetchAppointments = async () => {
+        try {
+            const response = await fetch("http://localhost:5000/api/v1/appointments");
+            const data = await response.json();
+            console.log("Fetched appointments:", data);
+            setAppointments(Array.isArray(data) ? data : []); // Aseguramos que sea un arreglo
+        } catch (error) {
+            console.error("Error al cargar citas:", error);
+            setAppointments([]); // Si ocurre un error, aseguramos que sea un arreglo vacío
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleEditAppointment = async (appointmentData) => {
         try {
             const response = await fetch(`http://localhost:5000/api/v1/appointments/${appointmentData.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(appointmentData)
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(appointmentData),
             });
 
             if (response.ok) {
                 setShowEditModal(false);
                 fetchAppointments();
             } else {
-                throw new Error('Error al actualizar la cita');
+                throw new Error("Error al actualizar la cita");
             }
         } catch (error) {
-            console.error('Error:', error);
-            alert('Error al actualizar la cita');
+            console.error("Error:", error);
+            alert("Error al actualizar la cita");
         }
     };
 
     const handleDeleteAppointment = async (id) => {
-        if (!confirm('¿Estás seguro de que deseas eliminar esta cita?')) return;
+        if (!confirm("¿Estás seguro de que deseas eliminar esta cita?")) return;
 
         try {
             const response = await fetch(`http://localhost:5000/api/v1/appointments/${id}`, {
-                method: 'DELETE'
+                method: "DELETE",
             });
 
             if (response.ok) {
                 fetchAppointments();
             } else {
-                throw new Error('Error al eliminar la cita');
+                throw new Error("Error al eliminar la cita");
             }
         } catch (error) {
-            console.error('Error:', error);
-            alert('Error al eliminar la cita');
-        }
-    };
-
-    const fetchAppointments = async () => {
-        try {
-            const response = await fetch('http://localhost:5000/api/v1/appointments');
-            const data = await response.json();
-            setAppointments(data);
-        } catch (error) {
-            console.error('Error al cargar citas:', error);
-        } finally {
-            setLoading(false);
+            console.error("Error:", error);
+            alert("Error al eliminar la cita");
         }
     };
 
     const updateAppointmentStatus = async (appointmentId, newStatus) => {
         try {
             const response = await fetch(`http://localhost:5000/api/v1/appointments/${appointmentId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ estado: newStatus })
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ estado: newStatus }),
             });
             if (response.ok) {
                 fetchAppointments(); // Recargar citas
             }
         } catch (error) {
-            console.error('Error al actualizar cita:', error);
+            console.error("Error al actualizar cita:", error);
         }
     };
 
@@ -530,53 +532,79 @@ function AppointmentManager() {
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Servicio</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Cliente
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Servicio
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Fecha
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Estado
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                    Acciones
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {appointments.map((appointment) => (
-                                <tr key={appointment.id}>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        {appointment.usuario?.nombre}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        {appointment.servicio?.nombre}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        {new Date(appointment.fecha).toLocaleString()}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <select
-                                            value={appointment.estado}
-                                            onChange={(e) => updateAppointmentStatus(appointment.id, e.target.value)}
-                                            className="rounded border p-1"
-                                        >
-                                            <option value="Pendiente">Pendiente</option>
-                                            <option value="Confirmada">Confirmada</option>
-                                            <option value="Completada">Completada</option>
-                                            <option value="Cancelada">Cancelada</option>
-                                        </select>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <button
-                                            onClick={() => handleEditAppointment(appointment)}
-                                            className="text-blue-600 hover:text-blue-900 mr-2"
-                                        >
-                                            Editar
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteAppointment(appointment.id)}
-                                            className="text-red-600 hover:text-red-900"
-                                        >
-                                            Eliminar
-                                        </button>
+                            {Array.isArray(appointments) && appointments.length > 0 ? (
+                                appointments.map((appointment) => (
+                                    <tr key={appointment.id}>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {appointment.usuario?.nombre || "Desconocido"}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {appointment.servicio?.nombre || "Desconocido"}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {new Date(appointment.fecha).toLocaleString()}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <select
+                                                value={appointment.estado}
+                                                onChange={(e) =>
+                                                    updateAppointmentStatus(
+                                                        appointment.id,
+                                                        e.target.value
+                                                    )
+                                                }
+                                                className="rounded border p-1"
+                                            >
+                                                <option value="Pendiente">Pendiente</option>
+                                                <option value="Confirmada">Confirmada</option>
+                                                <option value="Completada">Completada</option>
+                                                <option value="Cancelada">Cancelada</option>
+                                            </select>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <button
+                                                onClick={() => handleEditAppointment(appointment)}
+                                                className="text-blue-600 hover:text-blue-900 mr-2"
+                                            >
+                                                Editar
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteAppointment(appointment.id)}
+                                                className="text-red-600 hover:text-red-900"
+                                            >
+                                                Eliminar
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td
+                                        colSpan={5}
+                                        className="text-center py-4 text-gray-500"
+                                    >
+                                        No hay citas registradas.
                                     </td>
                                 </tr>
-                            ))}
+                            )}
                         </tbody>
                     </table>
                 </div>

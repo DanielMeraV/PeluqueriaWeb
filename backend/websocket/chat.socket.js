@@ -10,53 +10,64 @@ module.exports = (io) => {
         const isAdmin = socket.handshake.query.isAdmin === 'true';
 
         if (!userId) {
-            console.error('Error: userId no está definido en la conexión WebSocket.');
             socket.emit('error', 'userId no válido.');
             return;
         }
 
-        // Guardar el socket del usuario conectado
         connectedUsers.set(userId, socket.id);
         if (isAdmin) {
             adminSockets.add(socket.id);
+            try {
+                const chats = await service.findAllChats();
+                socket.emit('activeChats', chats);
+            } catch (error) {
+                console.error('Error al cargar chats:', error);
+                socket.emit('error', 'Error al cargar chats activos');
+            }
         }
 
         try {
-            // Cargar mensajes previos para el usuario conectado
             const messages = await service.findByUser(userId);
             socket.emit('previousMessages', messages);
         } catch (error) {
-            console.error('Error al cargar mensajes:', error.message);
+            console.error('Error al cargar mensajes:', error);
         }
 
-        // Manejar el evento de recibir un mensaje nuevo
+        // En chat.socket.js (backend)
         socket.on('sendMessage', async (messageData) => {
-            if (!messageData.userId || !messageData.content) {
-                throw new Error('userId y content son requeridos');
-            }
-
             try {
+                console.log('Mensaje recibido:', messageData);
                 const newMessage = await service.create({
                     usuarioId: messageData.userId,
                     mensaje: messageData.content,
-                    toUserId: 'admin', // Asegúrate que siempre tenga este valor para mensajes de cliente
+                    toUserId: messageData.toUserId,
                     fechaEnvio: new Date()
                 });
 
+                // Notificar siempre al remitente
                 socket.emit('message', newMessage);
-                // Notificar a los admins
-                adminSockets.forEach(adminSocketId => {
-                    io.to(adminSocketId).emit('message', newMessage);
-                });
+
+                // Notificar al destinatario
+                if (isAdmin) {
+                    const clientSocket = connectedUsers.get(messageData.toUserId);
+                    if (clientSocket) {
+                        io.to(clientSocket).emit('message', newMessage);
+                    }
+                } else {
+                    // Notificar a todos los admins
+                    Array.from(adminSockets).forEach(adminSocketId => {
+                        io.to(adminSocketId).emit('message', newMessage);
+                    });
+                }
+
+                console.log('Mensaje enviado a todos los destinatarios');
             } catch (error) {
                 console.error('Error:', error);
                 socket.emit('error', { message: error.message });
             }
         });
 
-        // Manejar la desconexión del usuario
         socket.on('disconnect', () => {
-            console.log(`Usuario con ID ${userId} desconectado`);
             connectedUsers.delete(userId);
             if (isAdmin) {
                 adminSockets.delete(socket.id);

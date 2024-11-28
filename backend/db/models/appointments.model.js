@@ -1,17 +1,14 @@
+// models/appointments.model.js
 const { Model, DataTypes } = require('sequelize');
 
 class Appointment extends Model {
     static config(sequelize) {
         return {
             sequelize,
-            tableName: 'citas',
+            tableName: 'appointments',
             modelName: 'Appointment',
             timestamps: false
-        }
-    }
-
-    static associate(models) {
-        this.belongsTo(models.Service, { foreignKey: 'servicioId', as: 'servicio' });
+        };
     }
 }
 
@@ -20,48 +17,37 @@ const AppointmentSchema = {
         type: DataTypes.INTEGER,
         autoIncrement: true,
         primaryKey: true,
+        allowNull: false
+    },
+    fecha: {
+        type: DataTypes.DATE,
+        allowNull: false
+    },
+    estado: {
+        type: DataTypes.STRING,
         allowNull: false,
-        field: 'id'
+        validate: {
+            isIn: [['Pendiente', 'Confirmada', 'Completada', 'Cancelada']]
+        }
     },
     usuarioId: {
-        type: DataTypes.STRING(10),
+        type: DataTypes.STRING(50),
         allowNull: false,
         references: {
-            model: 'Usuarios', // Nombre de la tabla de referencia
+            model: 'usuarios',
             key: 'id'
         },
-        onDelete: 'CASCADE',
-        field: 'usuarioid'
+        onDelete: 'CASCADE'
     },
     servicioId: {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-            model: 'Servicios', // Nombre de la tabla de referencia
+            model: 'servicios',
             key: 'id'
         },
-        onDelete: 'CASCADE',
-        field: 'servicioid'
-    },
-    fecha: {
-        type: DataTypes.DATE,
-        allowNull: false,
-        field: 'fecha'
-    },
-    estado: {
-        type: DataTypes.STRING(20),
-        allowNull: false,
-        validate: {
-            isIn: [['Pendiente', 'Confirmada', 'Completada', 'Cancelada']]
-        },
-        defaultValue: 'Pendiente'
-    },
-    fechaCreacion: {
-        type: DataTypes.DATE,
-        defaultValue: DataTypes.NOW,
-        allowNull: false,
-        field: 'fechacreacion'
+        onDelete: 'CASCADE'
     }
 };
 
-module.exports = { Appointment, AppointmentSchema }
+module.exports = { Appointment, AppointmentSchema };

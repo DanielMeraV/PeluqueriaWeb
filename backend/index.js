@@ -20,7 +20,10 @@ const io = new Server(httpServer, {
     origin: ALLOWED_ORIGINS,
     methods: ["GET", "POST"],
     credentials: true
-  }
+  },
+  transports: ['websocket', 'polling'], // Prioriza WebSocket
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 app.use(cors({
@@ -37,6 +40,8 @@ require('./websocket/chat.socket')(io);
 app.get('/', (req, res) => {
   res.send('Conexión exitosa con el backend!');
 });
+
+
 
 routerApi(app);
 

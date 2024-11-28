@@ -1,6 +1,8 @@
 const { models } = require('../libs/sequelize');
 const { Op } = require('sequelize'); // Asegúrate de importar 
 const { User } = require('../db/models/users.model'); // Importa el modelo User
+const { sequelize } = require('../libs/sequelize.js');
+
 
 class ChatMessagesService {
     constructor() {
@@ -9,60 +11,61 @@ class ChatMessagesService {
     }
 
     async find(userId) {
-        try {
-            if (!userId) {
-                throw new Error('El userId es undefined o null. No se puede realizar la búsqueda.');
-            }
+        if (!userId) return [];
 
-            const messages = await models.ChatMessage.findAll({
-                where: {
-                    [Op.or]: [
-                        { usuarioId: userId },
-                        { toUserId: userId },
-                    ],
-                },
-                order: [['fechaEnvio', 'ASC']],
-                include: [
-                    {
-                        model: User,
-                        as: 'remitente',
-                        attributes: ['id', 'nombre', 'email'],
-                    },
-                    {
-                        model: User,
-                        as: 'destinatario',
-                        attributes: ['id', 'nombre', 'email'],
-                    },
+        return await models.ChatMessage.findAll({
+            where: {
+                [Op.or]: [
+                    { usuarioId: userId },
+                    { toUserId: userId },
                 ],
-            });
-
-            console.log('Mensajes encontrados:', messages.length);
-            return messages;
-        } catch (error) {
-            console.error('Error en find:', error.message);
-            throw error;
-        }
+            },
+            order: [['fechaEnvio', 'ASC']],
+            include: [
+                {
+                    model: models.User,
+                    as: 'remitente',
+                    attributes: ['id', 'nombre', 'email'],
+                },
+                {
+                    model: models.User,
+                    as: 'destinatario',
+                    attributes: ['id', 'nombre', 'email'],
+                },
+            ],
+        });
     }
-
 
 
     async findByUser(userId) {
-        try {
-            const messages = await models.ChatMessage.findAll({
-                where: {
-                    [Op.or]: [
-                        { usuarioId: userId },
-                        { toUserId: userId }
-                    ]
+        if (!userId) return [];
+
+        const messages = await models.ChatMessage.findAll({
+            where: {
+                [Op.or]: [
+                    { usuarioId: userId },
+                    { toUserId: userId }
+                ]
+            },
+            order: [["fechaEnvio", "ASC"]],
+            include: [
+                {
+                    model: User,
+                    as: "remitente",
+                    attributes: ["id", "nombre", "email"]
                 },
-                order: [['fechaEnvio', 'ASC']]
-            });
-            return messages;
-        } catch (error) {
-            console.error('Error en findByUser:', error);
-            throw error;
-        }
+                {
+                    model: User,
+                    as: "destinatario",
+                    attributes: ["id", "nombre", "email"]
+                }
+            ]
+        });
+
+        return messages;
     }
+
+
 
     async create(data) {
         try {
@@ -85,6 +88,32 @@ class ChatMessagesService {
             throw error;
         }
     }
+
+    async findAllChats() {
+        const messages = await sequelize.query(`
+            SELECT DISTINCT ON (cm."usuarioid") 
+                cm."usuarioid",
+                cm."mensaje",
+                cm."fechaenvio",
+                u."nombre"
+            FROM "chatmensajes" cm
+            LEFT JOIN "usuarios" u ON cm."usuarioid" = u."id"
+            WHERE cm."usuarioid" NOT LIKE 'admin_%'
+            ORDER BY cm."usuarioid", cm."fechaenvio" DESC
+        `, {
+            type: sequelize.QueryTypes.SELECT
+        });
+
+        return messages.map(msg => ({
+            userId: msg.usuarioid,
+            nombre: msg.nombre || `Usuario ${msg.usuarioid}`,
+            lastMessage: msg.mensaje,
+            timestamp: msg.fechaenvio
+        }));
+    }
+
+
+
 }
 
 module.exports = ChatMessagesService;
