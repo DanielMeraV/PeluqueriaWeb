@@ -10,14 +10,27 @@ class ChatMessagesService {
         this.models = models;
     }
 
+    cleanUserId(userId) {
+        return typeof userId === 'string' ? userId.replace('admin_', '') : userId;
+    }
+
+    async verifyUserExists(userId) {
+        const cleanId = this.cleanUserId(userId);
+        const user = await models.User.findByPk(cleanId);
+        return !!user;
+    }
+
+
     async find(userId) {
         if (!userId) return [];
+
+        const cleanId = this.cleanUserId(userId);
 
         return await models.ChatMessage.findAll({
             where: {
                 [Op.or]: [
-                    { usuarioId: userId },
-                    { toUserId: userId },
+                    { usuarioId: cleanId },
+                    { toUserId: cleanId },
                 ],
             },
             order: [['fechaEnvio', 'ASC']],
@@ -37,14 +50,65 @@ class ChatMessagesService {
     }
 
 
+    async create(data) {
+        try {
+            // Limpiar IDs antes de crear el mensaje
+            const messageData = {
+                usuarioId: this.cleanUserId(data.usuarioId),
+                mensaje: data.mensaje,
+                toUserId: data.toUserId ? this.cleanUserId(data.toUserId) : null,
+                fechaEnvio: data.fechaEnvio || new Date(),
+                leido: false
+            };
+
+            // Verificar que tanto el remitente como el destinatario existen
+            const [senderExists, recipientExists] = await Promise.all([
+                this.verifyUserExists(messageData.usuarioId),
+                messageData.toUserId ? this.verifyUserExists(messageData.toUserId) : Promise.resolve(true)
+            ]);
+
+            if (!senderExists) {
+                throw new Error(`Remitente ${data.usuarioId} no encontrado`);
+            }
+
+            if (messageData.toUserId && !recipientExists) {
+                throw new Error(`Destinatario ${data.toUserId} no encontrado`);
+            }
+
+            // Crear el mensaje
+            const message = await models.ChatMessage.create(messageData);
+
+            // Retornar el mensaje con las relaciones cargadas
+            return await models.ChatMessage.findByPk(message.id, {
+                include: [
+                    {
+                        model: User,
+                        as: "remitente",
+                        attributes: ["id", "nombre", "email"]
+                    },
+                    {
+                        model: User,
+                        as: "destinatario",
+                        attributes: ["id", "nombre", "email"]
+                    }
+                ]
+            });
+        } catch (error) {
+            console.error('Error en create:', error);
+            throw error;
+        }
+    }
+
     async findByUser(userId) {
         if (!userId) return [];
 
-        const messages = await models.ChatMessage.findAll({
+        const cleanId = this.cleanUserId(userId);
+
+        return await models.ChatMessage.findAll({
             where: {
                 [Op.or]: [
-                    { usuarioId: userId },
-                    { toUserId: userId }
+                    { usuarioId: cleanId },
+                    { toUserId: cleanId }
                 ]
             },
             order: [["fechaEnvio", "ASC"]],
@@ -61,20 +125,8 @@ class ChatMessagesService {
                 }
             ]
         });
-
-        return messages;
     }
 
-
-
-    async create(data) {
-        try {
-            return await models.ChatMessage.create(data);
-        } catch (error) {
-            console.error('Error en create:', error);
-            throw error;
-        }
-    }
 
     async markAsRead(id) {
         try {
@@ -90,28 +142,47 @@ class ChatMessagesService {
     }
 
     async findAllChats() {
-        const messages = await sequelize.query(`
-            SELECT DISTINCT ON (cm."usuarioid") 
-                cm."usuarioid",
-                cm."mensaje",
-                cm."fechaenvio",
-                u."nombre"
-            FROM "chatmensajes" cm
-            LEFT JOIN "usuarios" u ON cm."usuarioid" = u."id"
-            WHERE cm."usuarioid" NOT LIKE 'admin_%'
-            ORDER BY cm."usuarioid", cm."fechaenvio" DESC
-        `, {
-            type: sequelize.QueryTypes.SELECT
-        });
+        try {
+            const messages = await sequelize.query(`
+                SELECT DISTINCT ON (u.id) 
+                    u.id as usuarioid,
+                    u.nombre,
+                    cm.mensaje,
+                    cm.fechaenvio
+                FROM usuarios u
+                LEFT JOIN chatmensajes cm ON u.id = cm.usuarioid
+                WHERE u.rol = 'Cliente'
+                ORDER BY u.id, cm.fechaenvio DESC NULLS LAST
+            `, {
+                type: sequelize.QueryTypes.SELECT
+            });
 
-        return messages.map(msg => ({
-            userId: msg.usuarioid,
-            nombre: msg.nombre || `Usuario ${msg.usuarioid}`,
-            lastMessage: msg.mensaje,
-            timestamp: msg.fechaenvio
-        }));
+            return messages.map(msg => ({
+                userId: msg.usuarioid,
+                nombre: msg.nombre || `Usuario ${msg.usuarioid}`,
+                lastMessage: msg.mensaje || 'No hay mensajes',
+                timestamp: msg.fechaenvio
+            }));
+        } catch (error) {
+            console.error('Error en findAllChats:', error);
+            throw error;
+        }
     }
 
+    async findAdminUser() {
+        try {
+            const adminUser = await models.User.findOne({
+                where: {
+                    rol: 'Admin',
+                    estado: true
+                }
+            });
+            return adminUser;
+        } catch (error) {
+            console.error('Error al buscar admin:', error);
+            throw error;
+        }
+    }
 
 
 }

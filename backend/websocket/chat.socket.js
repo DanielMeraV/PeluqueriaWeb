@@ -5,7 +5,6 @@ module.exports = (io) => {
     const connectedUsers = new Map();
     const adminSockets = new Set();
 
-    // Log de conexiones activas periódicamente
     setInterval(() => {
         console.log('Usuarios conectados:', connectedUsers.size);
         console.log('Admins conectados:', adminSockets.size);
@@ -23,7 +22,9 @@ module.exports = (io) => {
             return;
         }
 
-        // Manejar reconexión
+        // Extraer el ID real para administradores
+        const actualUserId = isAdmin ? userId.replace('admin_', '') : userId;
+
         if (connectedUsers.has(userId)) {
             console.log(`Reconexión del usuario ${userId}`);
             const oldSocketId = connectedUsers.get(userId);
@@ -36,7 +37,7 @@ module.exports = (io) => {
             try {
                 const chats = await service.findAllChats();
                 socket.emit('activeChats', chats);
-                console.log(`Chats enviados al admin ${userId}`);
+                console.log(`Chats enviados al admin ${actualUserId}`);
             } catch (error) {
                 console.error('Error al cargar chats:', error);
                 socket.emit('error', 'Error al cargar chats activos');
@@ -44,9 +45,9 @@ module.exports = (io) => {
         }
 
         try {
-            const messages = await service.findByUser(userId);
+            const messages = await service.findByUser(actualUserId);
             socket.emit('previousMessages', messages);
-            console.log(`Mensajes previos enviados al usuario ${userId}`);
+            console.log(`Mensajes previos enviados al usuario ${actualUserId}`);
         } catch (error) {
             console.error('Error al cargar mensajes:', error);
         }
@@ -54,10 +55,21 @@ module.exports = (io) => {
         socket.on('sendMessage', async (messageData) => {
             try {
                 console.log('Mensaje recibido:', messageData);
+
+                // Si el mensaje es para un admin, buscar un admin en la base de datos
+                let actualToUserId = messageData.toUserId;
+                if (messageData.toUserId === 'admin') {
+                    const adminUser = await service.findAdminUser(); // Necesitamos añadir este método
+                    if (!adminUser) {
+                        throw new Error('No se encontró un administrador disponible');
+                    }
+                    actualToUserId = adminUser.id;
+                }
+
                 const newMessage = await service.create({
                     usuarioId: messageData.userId,
                     mensaje: messageData.content,
-                    toUserId: messageData.toUserId,
+                    toUserId: actualToUserId,
                     fechaEnvio: new Date()
                 });
 
@@ -93,7 +105,6 @@ module.exports = (io) => {
             }
         });
 
-        // Manejar errores de socket
         socket.on('error', (error) => {
             console.error(`Error en socket ${socket.id}:`, error);
         });
