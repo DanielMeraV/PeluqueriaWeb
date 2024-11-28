@@ -36,7 +36,21 @@ module.exports = (io) => {
         // En chat.socket.js (backend)
         socket.on('sendMessage', async (messageData) => {
             try {
-                console.log('Mensaje recibido:', messageData);
+                console.log('Validando datos:', messageData);
+
+                // Verificar que el usuario existe antes de crear el mensaje
+                const userExists = await service.verifyUserExists(messageData.userId);
+                if (!userExists) {
+                    throw new Error('Usuario remitente no existe');
+                }
+
+                if (messageData.toUserId) {
+                    const recipientExists = await service.verifyUserExists(messageData.toUserId);
+                    if (!recipientExists) {
+                        throw new Error('Usuario destinatario no existe');
+                    }
+                }
+
                 const newMessage = await service.create({
                     usuarioId: messageData.userId,
                     mensaje: messageData.content,
@@ -44,25 +58,9 @@ module.exports = (io) => {
                     fechaEnvio: new Date()
                 });
 
-                // Notificar siempre al remitente
-                socket.emit('message', newMessage);
-
-                // Notificar al destinatario
-                if (isAdmin) {
-                    const clientSocket = connectedUsers.get(messageData.toUserId);
-                    if (clientSocket) {
-                        io.to(clientSocket).emit('message', newMessage);
-                    }
-                } else {
-                    // Notificar a todos los admins
-                    Array.from(adminSockets).forEach(adminSocketId => {
-                        io.to(adminSocketId).emit('message', newMessage);
-                    });
-                }
-
-                console.log('Mensaje enviado a todos los destinatarios');
+                // resto del código...
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Error detallado:', error);
                 socket.emit('error', { message: error.message });
             }
         });

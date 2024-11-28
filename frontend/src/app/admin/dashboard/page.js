@@ -1,12 +1,19 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { AdminChat } from '../../../components/Chat/AdminChat';
 import { ChatProvider } from '../../../context/ChatContext';
 import { EditAppointmentModal } from "../../../components/Citas/EditAppointmentModal"
+import { useAuth } from '../../../hooks/useAuth';  // Añade esta línea
+import { useAuthFetch } from '../../../hooks/useAuthFetch';  // Añade esta línea
+import { useRouter } from 'next/navigation';  // Asegúrate de que esta línea esté
+
+
+
 export default function AdminDashboard() {
-    const router = useRouter();
-    const [user, setUser] = useState(null); // Movido arriba
+    const router = useRouter();  // Declara el router aquí arriba con los otros hooks
+
+    const { user, loading } = useAuth();  // Esta es la única declaración de user que necesitas
+    const { fetchWithAuth } = useAuthFetch();
 
     const [mounted, setMounted] = useState(false);
     const [services, setServices] = useState([]);
@@ -23,6 +30,8 @@ export default function AdminDashboard() {
     const [success, setSuccess] = useState('');
     const [editingUser, setEditingUser] = useState(null);
 
+
+
     useEffect(() => {
         setMounted(true);
     }, []);
@@ -30,22 +39,12 @@ export default function AdminDashboard() {
     // Efecto para cargar datos (combinado con autenticación)
     useEffect(() => {
         const initializeAdmin = async () => {
+            if (!user || user.rol !== 'Admin') {
+                router.push('/login');
+                return;
+            }
+
             try {
-                const userData = localStorage.getItem('user');
-                if (!userData) {
-                    router.push('/login');
-                    return;
-                }
-
-                const parsedUser = JSON.parse(userData);
-                if (parsedUser.rol !== 'Admin') {
-                    router.push('/user/dashboard');
-                    return;
-                }
-
-                setUser(parsedUser);
-
-                // Cargar datos solo si es admin
                 const [servicesResponse, usersResponse] = await Promise.all([
                     fetch('http://localhost:5000/api/v1/services'),
                     fetch('http://localhost:5000/api/v1/users')
@@ -69,8 +68,18 @@ export default function AdminDashboard() {
             }
         };
 
-        initializeAdmin();
-    }, [router]); // Solo depende del router
+        if (!loading) {
+            initializeAdmin();
+        }
+    }, [user, loading, router]);
+
+    if (loading || !mounted) {
+        return <div>Cargando...</div>;
+    }
+
+    if (!user || user.rol !== 'Admin') {
+        return null;
+    }
 
     // Todas las funciones de manejo
     const createService = async (e) => {
@@ -99,16 +108,18 @@ export default function AdminDashboard() {
     const updateService = async (serviceId) => {
         try {
             const serviceToUpdate = services.find(s => s.id === serviceId);
-            const response = await fetch(`http://localhost:5000/api/v1/services/${serviceId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(serviceToUpdate),
-            });
 
-            if (!response.ok) {
-                throw new Error('No se pudo actualizar el servicio.');
-            }
+            const updatedData = await fetchWithAuth(
+                `http://localhost:5000/api/v1/services/${serviceId}`,
+                {
+                    method: 'PUT',
+                    body: JSON.stringify(serviceToUpdate)
+                }
+            );
 
+            setServices(services.map(service =>
+                service.id === serviceId ? updatedData : service
+            ));
             setSuccess('Servicio actualizado exitosamente.');
             setEditingService(null);
         } catch (err) {
