@@ -73,16 +73,21 @@ class AppointmentsService {
         return await appointment.update(data);
     }
 
-    async delete(id, userId) {
+    async delete(id, userId = null) {
         try {
             const appointment = await this.findById(id);
+
             if (!appointment) {
                 throw new Error("Cita no encontrada");
             }
-            if (appointment.usuarioId !== userId) {
+
+            // Verificar permisos solo si se proporciona userId
+            if (userId && appointment.usuarioId !== userId) {
                 throw new Error("No tienes permiso para eliminar esta cita.");
             }
-            return await appointment.destroy();
+
+            await appointment.destroy();
+            return { success: true, message: 'Cita eliminada exitosamente' };
         } catch (error) {
             console.error("Error en delete:", error);
             throw error;

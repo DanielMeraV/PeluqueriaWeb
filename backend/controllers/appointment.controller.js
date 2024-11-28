@@ -50,10 +50,18 @@ const update = async (req, res) => {
 
 const remove = async (req, res) => {
     try {
-        const response = await service.delete(req.params.id);
+        // Obtener el userId del usuario autenticado
+        const userId = req.user?.sub;  // Asumiendo que usas JWT y el ID está en sub
+
+        const response = await service.delete(req.params.id, userId);
         res.json(response);
     } catch (error) {
-        res.status(500).send({ success: false, message: error.message });
+        console.error('Error al eliminar cita:', error);
+        res.status(error.message.includes('permiso') ? 403 : 500)
+            .json({
+                success: false,
+                message: error.message
+            });
     }
 }
 

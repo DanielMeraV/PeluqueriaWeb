@@ -85,14 +85,23 @@ export default function AdminDashboard() {
     const createService = async (e) => {
         e.preventDefault();
         try {
+            const userData = JSON.parse(localStorage.getItem('user'));
+            if (!userData || !userData.token) {
+                throw new Error('No hay sesión activa');
+            }
+
             const response = await fetch('http://localhost:5000/api/v1/services', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${userData.token}`
+                },
                 body: JSON.stringify(newService),
             });
 
             if (!response.ok) {
-                throw new Error('No se pudo crear el servicio.');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'No se pudo crear el servicio.');
             }
 
             const createdService = await response.json();
@@ -101,6 +110,7 @@ export default function AdminDashboard() {
             setSuccess('Servicio creado exitosamente.');
         } catch (err) {
             setError(err.message);
+            console.error('Error al crear servicio:', err);
         }
     };
 
@@ -130,18 +140,29 @@ export default function AdminDashboard() {
     // Eliminar servicio
     const deleteService = async (id) => {
         try {
+            const userData = JSON.parse(localStorage.getItem('user'));
+            if (!userData || !userData.token) {
+                throw new Error('No hay sesión activa');
+            }
+
             const response = await fetch(`http://localhost:5000/api/v1/services/${id}`, {
                 method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${userData.token}`,
+                    'Content-Type': 'application/json'
+                }
             });
 
             if (!response.ok) {
-                throw new Error('No se pudo eliminar el servicio.');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'No se pudo eliminar el servicio.');
             }
 
             setServices(services.filter((service) => service.id !== id));
             setSuccess('Servicio eliminado exitosamente.');
         } catch (err) {
             setError(err.message);
+            console.error('Error al eliminar servicio:', err);
         }
     };
 

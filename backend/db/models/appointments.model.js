@@ -1,4 +1,3 @@
-// models/appointments.model.js
 const { Model, DataTypes } = require('sequelize');
 
 class Appointment extends Model {
@@ -9,6 +8,20 @@ class Appointment extends Model {
             modelName: 'Appointment',
             timestamps: false
         };
+    }
+
+    static associate(models) {
+        // Asociación con Usuario
+        this.belongsTo(models.User, {
+            as: 'usuario',
+            foreignKey: 'usuarioId'
+        });
+
+        // Asociación con Servicio
+        this.belongsTo(models.Service, {
+            as: 'servicio',
+            foreignKey: 'servicioId'
+        });
     }
 }
 
@@ -21,11 +34,20 @@ const AppointmentSchema = {
     },
     fecha: {
         type: DataTypes.DATE,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            isDate: true,
+            isFuture(value) {
+                if (value < new Date()) {
+                    throw new Error('La fecha de la cita debe ser futura');
+                }
+            }
+        }
     },
     estado: {
         type: DataTypes.STRING,
         allowNull: false,
+        defaultValue: 'Pendiente',
         validate: {
             isIn: [['Pendiente', 'Confirmada', 'Completada', 'Cancelada']]
         }
