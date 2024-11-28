@@ -465,11 +465,19 @@ export default function AdminDashboard() {
 }
 
 function AppointmentManager() {
-    const [appointments, setAppointments] = useState([]); // Inicializado como arreglo vacío
+    const [appointments, setAppointments] = useState([]);
     const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingAppointment, setEditingAppointment] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
+
+    const getAuthHeaders = () => {
+        const userData = JSON.parse(localStorage.getItem('user'));
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userData?.token}`
+        };
+    };
 
     useEffect(() => {
         fetchAppointments();
@@ -478,7 +486,10 @@ function AppointmentManager() {
 
     const fetchServices = async () => {
         try {
-            const response = await fetch("http://localhost:5000/api/v1/services");
+            const response = await fetch("http://localhost:5000/api/v1/services", {
+                headers: getAuthHeaders()
+            });
+            if (!response.ok) throw new Error('Error al cargar servicios');
             const data = await response.json();
             setServices(data);
         } catch (error) {
@@ -488,13 +499,16 @@ function AppointmentManager() {
 
     const fetchAppointments = async () => {
         try {
-            const response = await fetch("http://localhost:5000/api/v1/appointments");
+            const response = await fetch("http://localhost:5000/api/v1/appointments", {
+                headers: getAuthHeaders()
+            });
+
+            if (!response.ok) throw new Error('Error al cargar citas');
+
             const data = await response.json();
-            console.log("Fetched appointments:", data);
-            setAppointments(Array.isArray(data) ? data : []); // Aseguramos que sea un arreglo
+            setAppointments(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error("Error al cargar citas:", error);
-            setAppointments([]); // Si ocurre un error, aseguramos que sea un arreglo vacío
         } finally {
             setLoading(false);
         }
@@ -504,16 +518,13 @@ function AppointmentManager() {
         try {
             const response = await fetch(`http://localhost:5000/api/v1/appointments/${appointmentData.id}`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify(appointmentData),
             });
 
-            if (response.ok) {
-                setShowEditModal(false);
-                fetchAppointments();
-            } else {
-                throw new Error("Error al actualizar la cita");
-            }
+            if (!response.ok) throw new Error("Error al actualizar la cita");
+            setShowEditModal(false);
+            fetchAppointments(); // Recargar citas
         } catch (error) {
             console.error("Error:", error);
             alert("Error al actualizar la cita");
@@ -526,13 +537,11 @@ function AppointmentManager() {
         try {
             const response = await fetch(`http://localhost:5000/api/v1/appointments/${id}`, {
                 method: "DELETE",
+                headers: getAuthHeaders()
             });
 
-            if (response.ok) {
-                fetchAppointments();
-            } else {
-                throw new Error("Error al eliminar la cita");
-            }
+            if (!response.ok) throw new Error("Error al eliminar la cita");
+            fetchAppointments(); // Recargar citas
         } catch (error) {
             console.error("Error:", error);
             alert("Error al eliminar la cita");
@@ -543,112 +552,90 @@ function AppointmentManager() {
         try {
             const response = await fetch(`http://localhost:5000/api/v1/appointments/${appointmentId}`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ estado: newStatus }),
             });
-            if (response.ok) {
-                fetchAppointments(); // Recargar citas
-            }
+
+            if (!response.ok) throw new Error("Error al actualizar el estado");
+            fetchAppointments();
         } catch (error) {
             console.error("Error al actualizar cita:", error);
+            alert("Error al actualizar el estado de la cita");
         }
     };
+
+    if (loading) {
+        return <div>Cargando citas...</div>;
+    }
 
     return (
         <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold mb-4">Gestión de Citas</h2>
-            {loading ? (
-                <p>Cargando citas...</p>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Cliente
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Servicio
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Fecha
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Estado
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Acciones
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {Array.isArray(appointments) && appointments.length > 0 ? (
-                                appointments.map((appointment) => (
-                                    <tr key={appointment.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {appointment.usuario?.nombre || "Desconocido"}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {appointment.servicio?.nombre || "Desconocido"}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {new Date(appointment.fecha).toLocaleString()}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <select
-                                                value={appointment.estado}
-                                                onChange={(e) =>
-                                                    updateAppointmentStatus(
-                                                        appointment.id,
-                                                        e.target.value
-                                                    )
-                                                }
-                                                className="rounded border p-1"
-                                            >
-                                                <option value="Pendiente">Pendiente</option>
-                                                <option value="Confirmada">Confirmada</option>
-                                                <option value="Completada">Completada</option>
-                                                <option value="Cancelada">Cancelada</option>
-                                            </select>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <button
-                                                onClick={() => handleEditAppointment(appointment)}
-                                                className="text-blue-600 hover:text-blue-900 mr-2"
-                                            >
-                                                Editar
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteAppointment(appointment.id)}
-                                                className="text-red-600 hover:text-red-900"
-                                            >
-                                                Eliminar
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td
-                                        colSpan={5}
-                                        className="text-center py-4 text-gray-500"
-                                    >
-                                        No hay citas registradas.
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Servicio</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {appointments.length > 0 ? (
+                            appointments.map((appointment) => (
+                                <tr key={appointment.id}>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        {appointment.usuario?.nombre || "Desconocido"}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        {appointment.servicio?.nombre || "Desconocido"}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        {new Date(appointment.fecha).toLocaleString()}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <select
+                                            value={appointment.estado}
+                                            onChange={(e) => updateAppointmentStatus(appointment.id, e.target.value)}
+                                            className="rounded border p-1"
+                                        >
+                                            <option value="Pendiente">Pendiente</option>
+                                            <option value="Confirmada">Confirmada</option>
+                                            <option value="Completada">Completada</option>
+                                            <option value="Cancelada">Cancelada</option>
+                                        </select>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <button
+                                            onClick={() => {
+                                                setEditingAppointment(appointment);
+                                                setShowEditModal(true);
+                                            }}
+                                            className="text-blue-600 hover:text-blue-900 mr-2"
+                                        >
+                                            Editar
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteAppointment(appointment.id)}
+                                            className="text-red-600 hover:text-red-900"
+                                        >
+                                            Eliminar
+                                        </button>
                                     </td>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-
-            <EditAppointmentModal
-                isOpen={showEditModal}
-                onClose={() => setShowEditModal(false)}
-                appointment={editingAppointment}
-                services={services}
-                onSave={handleEditAppointment}
-            />
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={5} className="text-center py-4 text-gray-500">
+                                    No hay citas registradas.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
